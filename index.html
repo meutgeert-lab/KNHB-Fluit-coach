@@ -350,10 +350,9 @@
 
 <script>
 // ==== CONFIGURATIE ====
-// Plak hieronder je eigen gratis Gemini API-sleutel (via aistudio.google.com/apikey).
-// Beperk de sleutel in Google AI Studio tot het domein waar je dit bestand host
-// (HTTP referrer restriction), zodat de sleutel nergens anders bruikbaar is.
-const GEMINI_API_KEY = "AQ.Ab8RN6KTw_8SrlxNDZNpnF0WX0Whjn3IgH09Le1DYZgHtKf9lQ";
+// Dit is de sleutel/aanpak die op [14:54] aantoonbaar werkte:
+// gewone generateContent-endpoint, x-goog-api-key header, gemini-3.6-flash.
+const GEMINI_API_KEY = "AQ.Ab8RN6IMAcxoHE70eZHr2ucutGbhFL5EIAlWNufyRwDOHadkdg";
 const GEMINI_MODEL = "gemini-3.6-flash";
 // ======================
 
@@ -539,11 +538,6 @@ async function sendMessage(){
   const text = input.value.trim();
   if(!text || !selectedCategory) return;
 
-  if(!GEMINI_API_KEY || GEMINI_API_KEY === "PLAK_HIER_JE_GEMINI_API_SLEUTEL"){
-    addErrorNote('Er is nog geen Gemini API-sleutel ingesteld in dit bestand (zie GEMINI_API_KEY bovenin de code).');
-    return;
-  }
-
   addMessage('user', text);
   conversation.push({role: 'user', text: text});
   input.value = '';
@@ -555,28 +549,28 @@ async function sendMessage(){
 
   const systemPrompt = SYSTEM_PROMPT_BASE + selectedCategory.systemNote;
 
-  // Build a plain-text transcript for the Interactions API, since we manage
-  // history client-side (stateless) rather than using previous_interaction_id.
-  let transcript = "";
-  conversation.forEach(m => {
-    transcript += (m.role === 'assistant' ? "Coach: " : "Gebruiker: ") + m.text + "\n";
-  });
-  const fullInput = systemPrompt + "\n\n--- Gesprek tot nu toe ---\n" + transcript + "\nGeef nu antwoord op de laatste vraag van de gebruiker.";
+  // Gemini uses "user"/"model" roles and a separate system_instruction field.
+  // This is the exact request shape that worked earlier: generateContent
+  // endpoint, x-goog-api-key header only (no Api-Revision), model gemini-3.6-flash.
+  const geminiContents = conversation.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.text }]
+  }));
 
   let rawText = null;
   try{
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/interactions",
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-goog-api-key": GEMINI_API_KEY,
-          "Api-Revision": "2026-05-20"
+          "x-goog-api-key": GEMINI_API_KEY
         },
         body: JSON.stringify({
-          model: GEMINI_MODEL,
-          input: fullInput
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: geminiContents,
+          generationConfig: { maxOutputTokens: 1000 }
         })
       }
     );
@@ -607,17 +601,12 @@ async function sendMessage(){
     }
 
     let replyText = "Sorry, geen antwoordtekst ontvangen.";
-    if(data && Array.isArray(data.steps)){
-      const texts = [];
-      data.steps.filter(s => s && s.type === 'model_output').forEach(s => {
-        if(Array.isArray(s.content)){
-          s.content.forEach(c => { if(c && c.type === 'text' && typeof c.text === 'string') texts.push(c.text); });
-        }
-      });
-      if(texts.length) replyText = texts.join('\n');
-    } else if(data && Array.isArray(data.outputs)){
-      const texts = data.outputs.filter(o => o && o.type === 'text' && typeof o.text === 'string').map(o => o.text);
-      if(texts.length) replyText = texts.join('\n');
+    const candidate = data && Array.isArray(data.candidates) ? data.candidates[0] : null;
+    if(candidate && candidate.content && Array.isArray(candidate.content.parts)){
+      const textParts = candidate.content.parts.filter(p => p && typeof p.text === 'string').map(p => p.text);
+      if(textParts.length) replyText = textParts.join('\n');
+    } else if(candidate && candidate.finishReason){
+      replyText = "Geen antwoord ontvangen (reden: " + candidate.finishReason + "). Probeer je vraag anders te formuleren.";
     }
 
     addMessage('assistant', replyText);
