@@ -614,7 +614,8 @@ async function sendMessage(){
 
   }catch(err){
     removeThinking();
-    addErrorNote('Netwerkfout — controleer je verbinding en probeer het nog eens.');
+    const detail = err && err.message ? err.message : String(err);
+    addErrorNote('Netwerkfout: ' + detail);
     console.error('Fetch/network error:', err);
   }finally{
     sendBtn.disabled = false;
