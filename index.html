@@ -353,7 +353,7 @@
 // Plak hieronder je eigen gratis Gemini API-sleutel (via aistudio.google.com/apikey).
 // Beperk de sleutel in Google AI Studio tot het domein waar je dit bestand host
 // (HTTP referrer restriction), zodat de sleutel nergens anders bruikbaar is.
-const GEMINI_API_KEY = "AQ.Ab8RN6IMAcxoHE70eZHr2ucutGbhFL5EIAlWNufyRwDOHadkdg";
+const GEMINI_API_KEY = "AQ.Ab8RN6KTw_8SrlxNDZNpnF0WX0Whjn3IgH09Le1DYZgHtKf9lQ";
 const GEMINI_MODEL = "gemini-3.6-flash";
 // ======================
 
@@ -571,7 +571,8 @@ async function sendMessage(){
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-goog-api-key": GEMINI_API_KEY
+          "x-goog-api-key": GEMINI_API_KEY,
+          "Api-Revision": "2026-05-20"
         },
         body: JSON.stringify({
           model: GEMINI_MODEL,
